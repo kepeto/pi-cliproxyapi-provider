@@ -50,6 +50,31 @@ export function normalizeModelName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+// Aggressive normalization that drops gateway-specific decoration so that
+// non-standard labels map to the canonical models.dev id by context.
+// Tokenizes, drops noise words (free/agent/preview), 4-digit dates and the
+// "extra-" tier prefix, then de-duplicates repeated tokens (e.g. a label like
+// "DeepSeek: DeepSeek V4 Flash" repeats the vendor). Tier/family words
+// (low/medium/high/lite/pro/max/flash/opus) are kept so variants stay distinct.
+function fuzzyNormalize(value: string): string {
+  const NOISE = new Set(["free", "agent", "preview", "extra"]);
+  const tokens = value
+    .toLowerCase()
+    .replace(/[():]/g, " ")
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .filter((t) => !NOISE.has(t))
+    .filter((t) => !/^\d{4}$/.test(t)); // 4-digit dates like 0731
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+  for (const t of tokens) {
+    if (seen.has(t)) continue;
+    seen.add(t);
+    deduped.push(t);
+  }
+  return deduped.join("");
+}
+
 function metadataModelName(metadataId: string, metadata: ModelsDevMetadata): string {
   return metadata.id.split("/").at(-1) ?? metadataId.split("/").at(-1) ?? metadataId;
 }
@@ -179,6 +204,39 @@ export function findMetadataMatch(
     if (fallbackProvider) {
       const normalizedFallbackProvider = fallbackProvider.trim().toLowerCase();
       const fbKey = oneMatch(bareNormCandidates.filter((metadataId) => {
+        const metadata = catalog[metadataId];
+        return metadata && sourceProvider(metadataId, metadata).toLowerCase() === normalizedFallbackProvider;
+      }));
+      if (fbKey) {
+        return { metadataId: fbKey, metadata: catalog[fbKey], method: "provider-fallback" };
+      }
+    }
+  }
+
+  // Fuzzy match: strip gateway-specific decoration (free/agent/preview/dates)
+  // and compare the bare context. Catches labels like
+  // "DeepSeek: DeepSeek V4 Flash 0731 (Free)" -> deepseek/deepseek-v4-flash.
+  const fuzzyId = fuzzyNormalize(cpaModel.id);
+  if (fuzzyId) {
+    let fuzzyCandidates = catalogKeys.filter(
+      (key) => fuzzyNormalize(metadataModelName(key, catalog[key])) === fuzzyId,
+    );
+    // Disambiguate: prefer official vendor entries (vendor/model, vendor in the
+    // canonical list, no nested path and no dated variant) over aggregator or
+    // dated entries (anyapi/deepseek/..., alibaba/deepseek-v4-flash-0731).
+    const official = fuzzyCandidates.filter((key) => {
+      const parts = key.split("/");
+      const vendor = parts[0];
+      return vendor in CANONICAL_OWNER_PREFIXES && parts.length === 2 && !/\d{4}/.test(key);
+    });
+    if (official.length >= 1) fuzzyCandidates = official;
+    const fuzzyKey = oneMatch(fuzzyCandidates);
+    if (fuzzyKey) {
+      return { metadataId: fuzzyKey, metadata: catalog[fuzzyKey], method: "normalized-suffix" };
+    }
+    if (fallbackProvider) {
+      const normalizedFallbackProvider = fallbackProvider.trim().toLowerCase();
+      const fbKey = oneMatch(fuzzyCandidates.filter((metadataId) => {
         const metadata = catalog[metadataId];
         return metadata && sourceProvider(metadataId, metadata).toLowerCase() === normalizedFallbackProvider;
       }));
