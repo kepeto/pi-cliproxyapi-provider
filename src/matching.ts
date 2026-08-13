@@ -1,6 +1,28 @@
 import type { CpaModel } from "./cpa.ts";
 import type { ModelsDevCatalog, ModelsDevMetadata } from "./types.ts";
 
+// Vendors that the CLIProxyAPI gateway reports in `owned_by` do not match the
+// canonical models.dev provider prefixes. Map the gateway owners we recognise
+// to the models.dev provider so owner-based matching can resolve them.
+const OWNER_TO_VENDOR: Record<string, string> = {
+  antigravity: "google",
+  commandcode: "deepseek",
+  madewgn: "deepseek",
+  sekai: "deepseek",
+  zenmux: "zhipuai",
+  routeforme: "deepseek",
+  claudecode: "anthropic",
+};
+
+// Gateway model ids are sometimes prefixed with a vendor/route slug
+// (e.g. "ds/deepseek-v4-flash", "route/deepseek-v4-pro"). Strip a leading
+// "<slug>/" so the bare model id can match models.dev via suffix.
+function stripGatewayPrefix(id: string): string {
+  const idx = id.indexOf("/");
+  if (idx <= 0 || idx === id.length - 1) return id;
+  return id.slice(idx + 1);
+}
+
 const CANONICAL_OWNER_PREFIXES: Record<string, string> = {
   openai: "openai",
   anthropic: "anthropic",
@@ -112,7 +134,7 @@ export function findMetadataMatch(
     (key) => normalizeModelName(metadataModelName(key, catalog[key])) === normalizedId,
   );
   const owner = cpaModel.owned_by?.trim().toLowerCase();
-  const canonicalOwner = owner ? CANONICAL_OWNER_PREFIXES[owner] : undefined;
+  const canonicalOwner = owner ? (CANONICAL_OWNER_PREFIXES[owner] ?? OWNER_TO_VENDOR[owner]) : undefined;
   if (canonicalOwner) {
     const ownerKey = `${canonicalOwner}/${cpaModel.id}`;
     if (catalog[ownerKey]) {
@@ -133,6 +155,37 @@ export function findMetadataMatch(
   const normalizedSuffixKey = oneMatch(normalizedSuffixCandidates);
   if (normalizedSuffixKey) {
     return { metadataId: normalizedSuffixKey, metadata: catalog[normalizedSuffixKey], method: "normalized-suffix" };
+  }
+
+  // Gateway-prefixed ids (e.g. "ds/deepseek-v4-flash"): strip the slug and retry
+  // suffix matching against the bare model id.
+  const bareId = stripGatewayPrefix(cpaModel.id);
+  if (bareId !== cpaModel.id) {
+    const bareSuffixCandidates = catalogKeys.filter(
+      (key) => metadataModelName(key, catalog[key]) === bareId,
+    );
+    const bareKey = oneMatch(bareSuffixCandidates);
+    if (bareKey) {
+      return { metadataId: bareKey, metadata: catalog[bareKey], method: "suffix" };
+    }
+    const bareNormalized = normalizeModelName(bareId);
+    const bareNormCandidates = catalogKeys.filter(
+      (key) => normalizeModelName(metadataModelName(key, catalog[key])) === bareNormalized,
+    );
+    const bareNormKey = oneMatch(bareNormCandidates);
+    if (bareNormKey) {
+      return { metadataId: bareNormKey, metadata: catalog[bareNormKey], method: "normalized-suffix" };
+    }
+    if (fallbackProvider) {
+      const normalizedFallbackProvider = fallbackProvider.trim().toLowerCase();
+      const fbKey = oneMatch(bareNormCandidates.filter((metadataId) => {
+        const metadata = catalog[metadataId];
+        return metadata && sourceProvider(metadataId, metadata).toLowerCase() === normalizedFallbackProvider;
+      }));
+      if (fbKey) {
+        return { metadataId: fbKey, metadata: catalog[fbKey], method: "provider-fallback" };
+      }
+    }
   }
 
   if (fallbackProvider) {
