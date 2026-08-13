@@ -2,6 +2,7 @@ import type { RefreshModelsContext } from "@earendil-works/pi-ai";
 import type { ProviderConfig, ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 import type { CpaProviderConfig } from "./types.ts";
 import type { ProviderModelConfigLike } from "./types.ts";
+import { getStoredApiKey } from "./auth.ts";
 
 export interface ProviderRegistration {
   providerName: string;
@@ -33,7 +34,9 @@ export function buildProviderRegistration(
       name: `CLIProxyAPI (${config.providerName})`,
       baseUrl: config.baseUrl,
       api: "openai-completions",
-      apiKey: config.authRequired ? "$CLIPROXYAPI_API_KEY" : "cliproxyapi-no-auth",
+      apiKey: config.authRequired
+        ? (process.env.CLIPROXYAPI_API_KEY || "$CLIPROXYAPI_API_KEY")
+        : "cliproxyapi-no-auth",
       authHeader: config.authRequired && config.authHeader,
       headers: Object.keys(config.headers).length > 0 ? config.headers : undefined,
       models: normalizeProviderModels(models),

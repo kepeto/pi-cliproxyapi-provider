@@ -30,6 +30,26 @@ export default async function (pi: ExtensionAPI) {
     const runtime = new ProviderRuntime({ pi, config, catalog });
     registerCodexCompatiblePayloadAdapter(pi, config.providerName);
     registerCliproxyapiCommand(pi, runtime, catalog);
+
+    // Boot discovery: fetch models directly instead of waiting for omp's
+    // refreshModels hook (which omp 17.3.x does not trigger with network/credential).
+    const keyFn = () => getDiscoveryApiKey(config.providerName);
+    try {
+      await catalog.refresh("models", "manual", keyFn);
+    } catch (e) {
+      console.warn(`[pi-cliproxyapi-provider] boot model refresh failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    pi.on("session_start", async () => {
+      const snapshot = catalog.current();
+      if (snapshot && snapshot.built.models.length > 0) return;
+      try {
+        await catalog.refresh("models", "manual", keyFn);
+      } catch {
+        // ignore — keep cached/placeholder models
+      }
+    });
+
     await runtime.start();
   } catch (error) {
     registerCodexCompatiblePayloadAdapter(pi, config.providerName);

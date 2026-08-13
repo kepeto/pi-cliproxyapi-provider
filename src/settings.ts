@@ -42,10 +42,16 @@ function parseSettingsLayer(settings: unknown, scope: string): Partial<ProviderS
 
 export function loadProviderSettings(cwd: string, agentDir?: string): ProviderSettings {
   const manager = SettingsManager.create(cwd, agentDir);
+  // omp 17.3.x bundles an older SettingsManager without getGlobalSettings /
+  // getProjectSettings. Fall back to defaults so the provider still loads.
+  const globalSettings =
+    typeof manager.getGlobalSettings === "function" ? manager.getGlobalSettings() : undefined;
+  const projectSettings =
+    typeof manager.getProjectSettings === "function" ? manager.getProjectSettings() : undefined;
   return {
     ...DEFAULT_PROVIDER_SETTINGS,
-    ...parseSettingsLayer(manager.getGlobalSettings(), "global"),
-    ...parseSettingsLayer(manager.getProjectSettings(), "project"),
+    ...parseSettingsLayer(globalSettings, "global"),
+    ...parseSettingsLayer(projectSettings, "project"),
   };
 }
 
