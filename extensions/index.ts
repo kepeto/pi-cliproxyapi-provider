@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import { DEFAULT_CONFIG, loadConfig } from "../src/config.ts";
 import { ProviderCatalog } from "../src/catalog.ts";
 import { ProviderRuntime } from "../src/runtime.ts";
@@ -14,6 +15,21 @@ import { registerCodexCompatiblePayloadAdapter } from "../src/codex-compat.ts";
 const extensionDir = dirname(fileURLToPath(import.meta.url));
 const packageRoot = dirname(extensionDir);
 const bundledModelsDevPath = join(packageRoot, "data", "models-dev-fallback.json");
+
+// Load bundled default aliases (CLIProxyAPI gateway labels) and inject them
+// into DEFAULT_CONFIG so a fresh install enriches models.dev without user
+// config. User config aliases override these via the normal merge.
+try {
+  const bundledAliasesPath = join(packageRoot, "data", "default-aliases.json");
+  if (existsSync(bundledAliasesPath)) {
+    const raw = JSON.parse(readFileSync(bundledAliasesPath, "utf8"));
+    if (raw && typeof raw === "object") {
+      DEFAULT_CONFIG.modelAliases = { ...(raw as Record<string, string>), ...DEFAULT_CONFIG.modelAliases };
+    }
+  }
+} catch {
+  // ignore — aliases are best-effort
+}
 
 export default async function (pi: ExtensionAPI) {
   let config = DEFAULT_CONFIG;

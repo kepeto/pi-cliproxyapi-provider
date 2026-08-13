@@ -1,0 +1,13 @@
+{
+  "gemini-3-flash": "google/gemini-3-flash-preview",
+  "gemini-3-flash-agent": "google/gemini-3-flash-preview",
+  "gemini-3.1-pro-low": "google/gemini-3.1-pro-preview",
+  "gemini-3.5-flash-extra-low": "google/gemini-3.5-flash",
+  "gemini-3.5-flash-low": "google/gemini-3.5-flash",
+  "gemini-3.6-flash-high": "google/gemini-3.6-flash",
+  "gemini-3.7-flash-high": "google/gemini-3.7-flash",
+  "gemini-pro-agent": "google/gemini-3-pro-image-preview",
+  "DeepSeek: DeepSeek V4 Flash 0731 (Free)": "deepseek/deepseek-v4-flash",
+  "Z.AI: GLM 4.6V Flash (Free)": "zhipuai/glm-4.6",
+  "Z.AI: GLM 4.7 Flash (Free)": "zhipuai/glm-4.7"
+}

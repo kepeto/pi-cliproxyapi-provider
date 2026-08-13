@@ -14,6 +14,9 @@ export type ConfigLayer = Partial<CpaProviderConfig>;
 export const CONTEXT_WINDOW_PRESETS = [128000, 272000, 512000, 1000000] as const;
 export const MAX_TOKEN_PRESETS = [4096, 8192, 16384, 32768, 65536, 128000] as const;
 
+// Note: bundled default aliases (CLIProxyAPI gateway labels) are injected into
+// DEFAULT_CONFIG.modelAliases from extensions/index.ts at load time, using the
+// resolved package root. User config aliases still override via the merge.
 export const DEFAULT_CONFIG: CpaProviderConfig = {
   providerName: "cpa",
   baseUrl: "http://localhost:8317/v1",
