@@ -10,7 +10,7 @@ import { join } from "node:path";
  * Both `~/.pi/agent/auth.json` (pi) and `~/.omp/agent/auth.json` (omp) are
  * tried; either location works.
  */
-function readAuthKeyFromDisk(providerName: string): string | undefined {
+export function readAuthKeyFromDisk(providerName: string): string | undefined {
   const candidates = [
     join(homedir(), ".pi", "agent", "auth.json"),
     join(homedir(), ".omp", "agent", "auth.json"),
